@@ -1,6 +1,6 @@
 import Button from "./Button";
 
-function ASA({ src, metadata, assetId, onButtonClick }) {
+function NftItem({ src, metadata, assetId, onButtonClick }) {
   return (
     <div className="flex flex-row items-center gap-4 mb-4">
       <img src={src} alt="Image" className="w-1/4" />
@@ -10,9 +10,10 @@ function ASA({ src, metadata, assetId, onButtonClick }) {
           <span>Asset ID: {assetId}</span>
           <pre className="p-4">{JSON.stringify(metadata, null, 2)}</pre>
         </div>
+        <Button label="Buy NFT" onClick={() => onButtonClick(assetId)} />
       </div>
     </div>
   );
 }
 
-export default ASA;
+export default NftItem;

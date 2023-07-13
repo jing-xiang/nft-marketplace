@@ -1,19 +1,64 @@
 {
-    "name": "VaultApp",
+    "name": "nft-marketplace",
     "methods": [
         {
-            "name": "update_global",
-            "args": [],
-            "returns": {
-                "type": "string"
-            }
-        },
-        {
-            "name": "update_local",
+            "name": "create",
             "args": [
                 {
                     "type": "uint64",
-                    "name": "li"
+                    "name": "fee"
+                }
+            ],
+            "returns": {
+                "type": "void"
+            }
+        },
+        {
+            "name": "create_nft",
+            "args": [
+                {
+                    "type": "string",
+                    "name": "assetName"
+                },
+                {
+                    "type": "string",
+                    "name": "assetURL"
+                },
+                {
+                    "type": "uint64",
+                    "name": "numNFTs"
+                },
+                {
+                    "type": "uint64",
+                    "name": "sellingPrice"
+                },
+                {
+                    "type": "string",
+                    "name": "activeAddress"
+                },
+                {
+                    "type": "string",
+                    "name": "metadataEncoded"
+                }
+            ],
+            "returns": {
+                "type": "uint64"
+            }
+        },
+        {
+            "name": "purchase_nft",
+            "args": [
+                {
+                    "type": "uint64",
+                    "name": "assetID"
+                },
+                {
+                    "type": "uint64",
+                    "name": "feeAmount"
+                },
+                {
+                    "type": "uint64",
+                    "name": "fee"
                 }
             ],
             "returns": {
@@ -21,109 +66,7 @@
             }
         },
         {
-            "name": "deposit_asa",
-            "args": [
-                {
-                    "type": "uint64",
-                    "name": "amount"
-                }
-            ],
-            "returns": {
-                "type": "string"
-            }
-        },
-        {
-            "name": "withdraw_asa",
-            "args": [
-                {
-                    "type": "uint64",
-                    "name": "amount"
-                }
-            ],
-            "returns": {
-                "type": "string"
-            }
-        },
-        {
-            "name": "update_deposit_algos",
-            "args": [
-                {
-                    "type": "uint64",
-                    "name": "amount"
-                }
-            ],
-            "returns": {
-                "type": "string"
-            }
-        },
-        {
-            "name": "update_withdraw_algos",
-            "args": [
-                {
-                    "type": "uint64",
-                    "name": "amount"
-                }
-            ],
-            "returns": {
-                "type": "string"
-            }
-        },
-        {
-            "name": "transferasafromvault",
-            "args": [],
-            "returns": {
-                "type": "string"
-            }
-        },
-        {
-            "name": "transferasafromvaultwithoutclose",
-            "args": [],
-            "returns": {
-                "type": "string"
-            }
-        },
-        {
-            "name": "depositasatovault",
-            "args": [],
-            "returns": {
-                "type": "string"
-            }
-        },
-        {
-            "name": "optintoasset",
-            "args": [],
-            "returns": {
-                "type": "string"
-            }
-        },
-        {
-            "name": "sendasatobuyer",
-            "args": [],
-            "returns": {
-                "type": "string"
-            }
-        },
-        {
-            "name": "sendasatobuyercloseout",
-            "args": [],
-            "returns": {
-                "type": "string"
-            }
-        },
-        {
-            "name": "depositalgos",
-            "args": [
-                {
-                    "type": "uint64",
-                    "name": "amount"
-                }
-            ],
-            "returns": {
-                "type": "string"
-            }
-        },
-        {
-            "name": "receivealgos",
+            "name": "transferEarnings",
             "args": [
                 {
                     "type": "uint64",

@@ -1,0 +1,107 @@
+{
+    "hints": {
+        "create(uint64)void": {
+            "call_config": {
+                "no_op": "CREATE"
+            }
+        },
+        "transferEarnings(uint64)string": {
+            "call_config": {
+                "no_op": "CALL"
+            }
+        },
+        "update_contracts(string,uint64)string": {
+            "call_config": {
+                "no_op": "CALL"
+            }
+        }
+    },
+    "source": {
+        "approval": "I3ByYWdtYSB2ZXJzaW9uIDgKaW50Y2Jsb2NrIDAgMQpieXRlY2Jsb2NrIDB4NGY3NzZlNjU3MjQxNjQ2NDcyNjU3MzczIDB4IDB4MTUxZjdjNzUgMHg3MDZjNjE3NDY2NmY3MjZkNDY2NTY1CnR4bmEgQXBwbGljYXRpb25BcmdzIDAKcHVzaGJ5dGVzIDB4MjQwZDJmNjcgLy8gImNyZWF0ZSh1aW50NjQpdm9pZCIKPT0KYm56IG1haW5fbDYKdHhuYSBBcHBsaWNhdGlvbkFyZ3MgMApwdXNoYnl0ZXMgMHg2YTJlY2QzZCAvLyAidHJhbnNmZXJFYXJuaW5ncyh1aW50NjQpc3RyaW5nIgo9PQpibnogbWFpbl9sNQp0eG5hIEFwcGxpY2F0aW9uQXJncyAwCnB1c2hieXRlcyAweDdjOGQwNjdiIC8vICJ1cGRhdGVfY29udHJhY3RzKHN0cmluZyx1aW50NjQpc3RyaW5nIgo9PQpibnogbWFpbl9sNAplcnIKbWFpbl9sNDoKdHhuIE9uQ29tcGxldGlvbgppbnRjXzAgLy8gTm9PcAo9PQp0eG4gQXBwbGljYXRpb25JRAppbnRjXzAgLy8gMAohPQomJgphc3NlcnQKdHhuYSBBcHBsaWNhdGlvbkFyZ3MgMQpzdG9yZSAxCnR4bmEgQXBwbGljYXRpb25BcmdzIDIKYnRvaQpzdG9yZSAyCmxvYWQgMQpsb2FkIDIKY2FsbHN1YiB1cGRhdGVjb250cmFjdHNfNApzdG9yZSAzCmJ5dGVjXzIgLy8gMHgxNTFmN2M3NQpsb2FkIDMKY29uY2F0CmxvZwppbnRjXzEgLy8gMQpyZXR1cm4KbWFpbl9sNToKdHhuIE9uQ29tcGxldGlvbgppbnRjXzAgLy8gTm9PcAo9PQp0eG4gQXBwbGljYXRpb25JRAppbnRjXzAgLy8gMAohPQomJgphc3NlcnQKdHhuYSBBcHBsaWNhdGlvbkFyZ3MgMQpidG9pCmNhbGxzdWIgdHJhbnNmZXJFYXJuaW5nc18zCnN0b3JlIDAKYnl0ZWNfMiAvLyAweDE1MWY3Yzc1CmxvYWQgMApjb25jYXQKbG9nCmludGNfMSAvLyAxCnJldHVybgptYWluX2w2Ogp0eG4gT25Db21wbGV0aW9uCmludGNfMCAvLyBOb09wCj09CnR4biBBcHBsaWNhdGlvbklECmludGNfMCAvLyAwCj09CiYmCmFzc2VydAp0eG5hIEFwcGxpY2F0aW9uQXJncyAxCmJ0b2kKY2FsbHN1YiBjcmVhdGVfMQppbnRjXzEgLy8gMQpyZXR1cm4KCi8vIHByZWZpeF9rZXlfZ2VuCnByZWZpeGtleWdlbl8wOgpwcm90byAxIDEKcHVzaGJ5dGVzIDB4NjM2ZjZlNzQ3MjYxNjM3NDczIC8vICJjb250cmFjdHMiCmZyYW1lX2RpZyAtMQpjb25jYXQKcmV0c3ViCgovLyBjcmVhdGUKY3JlYXRlXzE6CnByb3RvIDEgMApieXRlY18wIC8vICJPd25lckFkZHJlc3MiCmJ5dGVjXzEgLy8gIiIKYXBwX2dsb2JhbF9wdXQKYnl0ZWNfMyAvLyAicGxhdGZvcm1GZWUiCmludGNfMCAvLyAwCmFwcF9nbG9iYWxfcHV0CmJ5dGVjXzAgLy8gIk93bmVyQWRkcmVzcyIKdHhuIFNlbmRlcgphcHBfZ2xvYmFsX3B1dApieXRlY18zIC8vICJwbGF0Zm9ybUZlZSIKZnJhbWVfZGlnIC0xCmFwcF9nbG9iYWxfcHV0CnJldHN1YgoKLy8gYmFzaWNfY2hlY2tzCmJhc2ljY2hlY2tzXzI6CnByb3RvIDAgMQp0eG4gUmVrZXlUbwpnbG9iYWwgWmVyb0FkZHJlc3MKPT0KdHhuIENsb3NlUmVtYWluZGVyVG8KZ2xvYmFsIFplcm9BZGRyZXNzCj09CiYmCnR4biBBc3NldENsb3NlVG8KZ2xvYmFsIFplcm9BZGRyZXNzCj09CiYmCnJldHN1YgoKLy8gdHJhbnNmZXJFYXJuaW5ncwp0cmFuc2ZlckVhcm5pbmdzXzM6CnByb3RvIDEgMQpieXRlY18xIC8vICIiCnR4biBTZW5kZXIKZ2xvYmFsIENyZWF0b3JBZGRyZXNzCj09Ci8vIHVuYXV0aG9yaXplZAphc3NlcnQKY2FsbHN1YiBiYXNpY2NoZWNrc18yCmFzc2VydApmcmFtZV9kaWcgLTEKaW50Y18wIC8vIDAKPgphc3NlcnQKaXR4bl9iZWdpbgppbnRjXzEgLy8gcGF5Cml0eG5fZmllbGQgVHlwZUVudW0KZnJhbWVfZGlnIC0xCml0eG5fZmllbGQgQW1vdW50CmJ5dGVjXzAgLy8gIk93bmVyQWRkcmVzcyIKYXBwX2dsb2JhbF9nZXQKaXR4bl9maWVsZCBSZWNlaXZlcgppbnRjXzAgLy8gMAppdHhuX2ZpZWxkIEZlZQppdHhuX3N1Ym1pdApwdXNoYnl0ZXMgMHgwMDE1NDU2MTcyNmU2OTZlNjc3MzIwNzQ3MjYxNmU3MzY2NjU3MjcyNjU2NDIxIC8vIDB4MDAxNTQ1NjE3MjZlNjk2ZTY3NzMyMDc0NzI2MTZlNzM2NjY1NzI3MjY1NjQyMQpmcmFtZV9idXJ5IDAKcmV0c3ViCgovLyB1cGRhdGVfY29udHJhY3RzCnVwZGF0ZWNvbnRyYWN0c180Ogpwcm90byAyIDEKYnl0ZWNfMSAvLyAiIgpmcmFtZV9kaWcgLTIKZXh0cmFjdCAyIDAKY2FsbHN1YiBwcmVmaXhrZXlnZW5fMApmcmFtZV9kaWcgLTEKYXBwX2dsb2JhbF9wdXQKcHVzaGJ5dGVzIDB4MDAxMDQzNmY2ZTc0NzI2MTYzNzQ3MzIwNjE2NDY0NjU2NDIxIC8vIDB4MDAxMDQzNmY2ZTc0NzI2MTYzNzQ3MzIwNjE2NDY0NjU2NDIxCmZyYW1lX2J1cnkgMApyZXRzdWI=",
+        "clear": "I3ByYWdtYSB2ZXJzaW9uIDgKcHVzaGludCAwIC8vIDAKcmV0dXJu"
+    },
+    "state": {
+        "global": {
+            "num_byte_slices": 1,
+            "num_uints": 11
+        },
+        "local": {
+            "num_byte_slices": 0,
+            "num_uints": 0
+        }
+    },
+    "schema": {
+        "global": {
+            "declared": {
+                "owner": {
+                    "type": "bytes",
+                    "key": "OwnerAddress",
+                    "descr": "Platform owner's address"
+                },
+                "platformFee": {
+                    "type": "uint64",
+                    "key": "platformFee",
+                    "descr": "platform"
+                }
+            },
+            "reserved": {
+                "contracts": {
+                    "type": "uint64",
+                    "max_keys": 10,
+                    "descr": "key: name of collection, value: NFT contract ID"
+                }
+            }
+        },
+        "local": {
+            "declared": {},
+            "reserved": {}
+        }
+    },
+    "contract": {
+        "name": "creator",
+        "methods": [
+            {
+                "name": "create",
+                "args": [
+                    {
+                        "type": "uint64",
+                        "name": "fee"
+                    }
+                ],
+                "returns": {
+                    "type": "void"
+                }
+            },
+            {
+                "name": "transferEarnings",
+                "args": [
+                    {
+                        "type": "uint64",
+                        "name": "amount"
+                    }
+                ],
+                "returns": {
+                    "type": "string"
+                }
+            },
+            {
+                "name": "update_contracts",
+                "args": [
+                    {
+                        "type": "string",
+                        "name": "name"
+                    },
+                    {
+                        "type": "uint64",
+                        "name": "contract_id"
+                    }
+                ],
+                "returns": {
+                    "type": "string"
+                }
+            }
+        ],
+        "networks": {}
+    },
+    "bare_call_config": {}
+}

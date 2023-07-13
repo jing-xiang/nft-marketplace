@@ -33,10 +33,6 @@ const submitToNetwork = async (signedTxns) => {
 };
 
 const getBasicProgramBytes = async (relativeFilePath) => {
-  // Read file for Teal code
-  // console.log(relativeFilePath);
-  const __dirname =
-    "C:/Users/chewj/github-classroom/Algo-Foundry/nft-marketplace-jing-xiang/";
   const filePath = path.join(__dirname, relativeFilePath);
   console.log(filePath);
   const data = fs.readFileSync(filePath);
@@ -77,55 +73,29 @@ const readGlobalState = async (appId) => {
   return gsMap;
 };
 
-const readLocalState = async (account, appId) => {
-  const acc = await algodClient.accountInformation(account).do();
-  const localStates = acc["apps-local-state"];
-
-  const appLocalState = localStates.find((ls) => {
-    return ls.id === appId;
-  });
-
-  if (appLocalState === undefined)
-    throw new Error("Account has not opted into the app.");
-
-  const lsMap = new Map();
-
-  // global state is a key value array
-  appLocalState["key-value"].forEach((item) => {
-    // decode from base64 and utf8
-    const formattedKey = decodeURIComponent(Buffer.from(item.key, "base64"));
-
-    let formattedValue;
-    if (item.value.type === 1) {
-      formattedValue = decodeURIComponent(
-        Buffer.from(item.value.bytes, "base64")
-      );
-    } else {
-      formattedValue = item.value.uint;
-    }
-
-    lsMap.set(formattedKey, formattedValue);
-  });
-
-  return lsMap;
-};
-
-const deployDemoApp = async (fromAccount) => {
+const deployDemoApp = async (fromAccount, fee) => {
   const suggestedParams = await algodClient.getTransactionParams().do();
 
   // programs
   const approvalProgram = await getBasicProgramBytes(
-    "assets/artifacts/nft-marketplace/approval.teal"
+    "../assets/artifacts/creator/approval.teal"
   );
   const clearProgram = await getBasicProgramBytes(
-    "assets/artifacts/nft-marketplace/clear.teal"
+    "../assets/artifacts/creator/clear.teal"
   );
-
+  //TODO: edit values
   // global / local states
-  const numGlobalInts = 0;
+  const numGlobalInts = 11;
   const numGlobalByteSlices = 1;
-  const numLocalInts = 2;
+  const numLocalInts = 0;
   const numLocalByteSlices = 0;
+
+  const platformFee = fee; //
+  const adminAddress = process.env.NEXT_PUBLIC_DEPLOYER_ADDR; //deployer address
+
+  const createmethodselector = getMethodByName("create").getSelector();
+
+  const appArgs = [createmethodselector, algosdk.encodeUint64(platformFee)];
 
   const txn = algosdk.makeApplicationCreateTxnFromObject({
     from: fromAccount.addr,
@@ -136,6 +106,8 @@ const deployDemoApp = async (fromAccount) => {
     numGlobalByteSlices,
     numLocalInts,
     numLocalByteSlices,
+    appArgs: appArgs,
+    accounts: [adminAddress],
   });
   console.log(txn);
 
@@ -152,23 +124,6 @@ const fundAccount = async (fromAccount, to, amount) => {
     to,
     amount,
     suggestedParams,
-  });
-
-  const signedTxn = txn.signTxn(fromAccount.sk);
-  return await submitToNetwork(signedTxn);
-};
-
-const callApp = async (fromAccount, appIndex, appArgs, accounts) => {
-  // get suggested params
-  const suggestedParams = await algodClient.getTransactionParams().do();
-
-  // call the created application
-  const txn = algosdk.makeApplicationNoOpTxnFromObject({
-    from: fromAccount.addr,
-    suggestedParams,
-    appIndex,
-    appArgs,
-    accounts,
   });
 
   const signedTxn = txn.signTxn(fromAccount.sk);
@@ -217,12 +172,9 @@ const optIntoAsset = async (fromAccount, assetId) => {
 };
 
 const getMethodByName = (methodName) => {
-  // Read in the local contract.json file
-  const __dirname =
-    "C:/Users/chewj/github-classroom/Algo-Foundry/nft-marketplace-jing-xiang/";
   const source = path.join(
     __dirname,
-    "assets/artifacts/nft-marketplace/contract.json"
+    "../assets/artifacts/nft-marketplace/contract.json"
   );
   const buff = fs.readFileSync(source);
 
@@ -258,53 +210,6 @@ const makeATCCall = async (txns) => {
   return result;
 };
 
-const fetchASA = async (algodClient) => {
-  const deployerAddr = process.env.NEXT_PUBLIC_DEPLOYER_ADDR;
-  const { assets } = await algodClient.accountInformation(deployerAddr).do();
-
-  function base64ToJson(base64String) {
-    const buffer = Buffer.from(base64String, "base64");
-    const jsonString = buffer.toString("utf-8");
-    const jsonObj = JSON.parse(jsonString);
-    return jsonObj;
-  }
-
-  let ASA = [];
-
-  const indexer_client = getIndexerClient(network);
-
-  var note = undefined;
-  if (assets) {
-    for (let asset of assets) {
-      const assetTxns = await indexer_client
-        .lookupAssetTransactions(asset["asset-id"])
-        .do();
-      //console.log("assetTxns: ", assetTxns);
-      const acfg_txns = assetTxns.transactions
-        .filter((txn) => txn["tx-type"] === "acfg")
-        .forEach((txns) => {
-          if (txns.note != undefined) {
-            try {
-              note = base64ToJson(txns.note);
-            } catch (e) {
-              console.log(e);
-            }
-          }
-        });
-
-      const assetInfo = await algodClient.getAssetByID(asset["asset-id"]).do();
-      nfts.push({
-        asset,
-        assetInfo,
-        metadata,
-        imgUrl,
-      });
-    }
-  }
-
-  return ASA;
-};
-
 const createAssetTransferTxn = async (
   algodClient,
   sender,
@@ -331,16 +236,7 @@ const accountInfo = async (addr) => {
 };
 
 const getMethod = (methodName) => {
-  // Read in the local contract.json file
-  // const __dirname =
-  //   "C:/Users/chewj/github-classroom/Algo-Foundry/vault-jing-xiang/";
-  // const source = path.join(
-  //   __dirname,
-  //   "assets/artifacts/VaultApp/contract.json"
-  // );
-  // const buff = fs.readFileSync(source);
-
-  const data = require("../assets/artifacts/nft-marketplace/contract.json");
+  const data = require("../assets/artifacts/creator/contract.json");
 
   // Parse the json file into an object, pass it to create an ABIContract object
   const contract = new algosdk.ABIContract(data);
@@ -356,15 +252,12 @@ export {
   deployDemoApp,
   fundAccount,
   readGlobalState,
-  readLocalState,
-  callApp,
   optIntoApp,
   optIntoAsset,
   submitToNetwork,
   getMethodByName,
   makeATCCall,
   getAlgodClient,
-  fetchASA,
   createAssetTransferTxn,
   accountInfo,
   getMethod,

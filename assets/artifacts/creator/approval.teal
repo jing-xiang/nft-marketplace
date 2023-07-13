@@ -1,0 +1,157 @@
+#pragma version 8
+intcblock 0 1
+bytecblock 0x4f776e657241646472657373 0x 0x151f7c75 0x706c6174666f726d466565
+txna ApplicationArgs 0
+pushbytes 0x240d2f67 // "create(uint64)void"
+==
+bnz main_l6
+txna ApplicationArgs 0
+pushbytes 0x6a2ecd3d // "transferEarnings(uint64)string"
+==
+bnz main_l5
+txna ApplicationArgs 0
+pushbytes 0x7c8d067b // "update_contracts(string,uint64)string"
+==
+bnz main_l4
+err
+main_l4:
+txn OnCompletion
+intc_0 // NoOp
+==
+txn ApplicationID
+intc_0 // 0
+!=
+&&
+assert
+txna ApplicationArgs 1
+store 1
+txna ApplicationArgs 2
+btoi
+store 2
+load 1
+load 2
+callsub updatecontracts_4
+store 3
+bytec_2 // 0x151f7c75
+load 3
+concat
+log
+intc_1 // 1
+return
+main_l5:
+txn OnCompletion
+intc_0 // NoOp
+==
+txn ApplicationID
+intc_0 // 0
+!=
+&&
+assert
+txna ApplicationArgs 1
+btoi
+callsub transferEarnings_3
+store 0
+bytec_2 // 0x151f7c75
+load 0
+concat
+log
+intc_1 // 1
+return
+main_l6:
+txn OnCompletion
+intc_0 // NoOp
+==
+txn ApplicationID
+intc_0 // 0
+==
+&&
+assert
+txna ApplicationArgs 1
+btoi
+callsub create_1
+intc_1 // 1
+return
+
+// prefix_key_gen
+prefixkeygen_0:
+proto 1 1
+pushbytes 0x636f6e747261637473 // "contracts"
+frame_dig -1
+concat
+retsub
+
+// create
+create_1:
+proto 1 0
+bytec_0 // "OwnerAddress"
+bytec_1 // ""
+app_global_put
+bytec_3 // "platformFee"
+intc_0 // 0
+app_global_put
+bytec_0 // "OwnerAddress"
+txn Sender
+app_global_put
+bytec_3 // "platformFee"
+frame_dig -1
+app_global_put
+retsub
+
+// basic_checks
+basicchecks_2:
+proto 0 1
+txn RekeyTo
+global ZeroAddress
+==
+txn CloseRemainderTo
+global ZeroAddress
+==
+&&
+txn AssetCloseTo
+global ZeroAddress
+==
+&&
+retsub
+
+// transferEarnings
+transferEarnings_3:
+proto 1 1
+bytec_1 // ""
+txn Sender
+global CreatorAddress
+==
+// unauthorized
+assert
+callsub basicchecks_2
+assert
+frame_dig -1
+intc_0 // 0
+>
+assert
+itxn_begin
+intc_1 // pay
+itxn_field TypeEnum
+frame_dig -1
+itxn_field Amount
+bytec_0 // "OwnerAddress"
+app_global_get
+itxn_field Receiver
+intc_0 // 0
+itxn_field Fee
+itxn_submit
+pushbytes 0x00154561726e696e6773207472616e7366657272656421 // 0x00154561726e696e6773207472616e7366657272656421
+frame_bury 0
+retsub
+
+// update_contracts
+updatecontracts_4:
+proto 2 1
+bytec_1 // ""
+frame_dig -2
+extract 2 0
+callsub prefixkeygen_0
+frame_dig -1
+app_global_put
+pushbytes 0x0010436f6e74726163747320616464656421 // 0x0010436f6e74726163747320616464656421
+frame_bury 0
+retsub

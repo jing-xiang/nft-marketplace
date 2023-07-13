@@ -1,7 +1,8 @@
 from beaker import *
 from pyteal import *
 
-class VaultAppState:
+# NFT contract
+class NFTMarketplaceState:
     """
     Global States
     """
@@ -10,315 +11,167 @@ class VaultAppState:
         stack_type=TealType.bytes,
         key=Bytes("OwnerAddress"),
         default=Bytes(""),
-        descr="Vault owner's address",
+        descr="Platform owner's address",
     )
 
-    """
-    Local States
-    """
-    #asa balance
-    asa_balance = LocalStateValue(
+    priceDict1 = ReservedGlobalStateValue(
         stack_type=TealType.uint64,
-        key=Bytes("AssetBalances"),
+        max_keys = 31,
+        descr="key: assetID, value: price"
+    )
+    
+    artistDict = ReservedGlobalStateValue(
+        stack_type=TealType.bytes,
+        max_keys = 31,
+        descr="key: assetID, value: artistAddress"
+    ) 
+    platformFee = GlobalStateValue(
+        stack_type=TealType.uint64,
+        key=Bytes("platformFee"),
         default=Int(0),
-        descr="Vault asset balances",
-    )
-    #algo balance
-    algo_balance = LocalStateValue(
-        stack_type=TealType.uint64,
-        key=Bytes("microAlgoBalance"),
-        default=Int(1100000),
-        descr="Vault microAlgo balance",
+        descr="platform fees"
     )
 
-app = Application("nft-marketplace", state=VaultAppState())
 
-@app.external
-def update_global(*,output: abi.String):
-    Assert(Txn.sender() == Global.creator_address())
-    Assert(Txn.rekey_to() == Global.zero_address()),
-    Assert(Txn.close_remainder_to() == Global.zero_address()),
-    Assert(Txn.asset_close_to() == Global.zero_address()), 
+app = Application("nft-marketplace", state=NFTMarketplaceState())
+
+@Subroutine(TealType.uint64)
+def get_price(assetID):
+    return app.state.priceDict1[Itob(assetID)].get()
+
+@app.create()
+def create(fee: abi.Uint64):
     return Seq(
-        Assert(Txn.sender() == app.state.owner.get()), 
-        app.state.owner.set(Txn.accounts[1]),
-        output.set("Updated global state!"),
+    app.initialize_global_state(),
+    app.state.owner.set(Txn.sender()),  # set initial admin
+    app.state.platformFee.set(fee.get()) # Set platformFee
     )
 
 
-@app.external
-def update_local(li: abi.Uint64, *, output: abi.String):
-    Assert(Txn.sender() == app.state.owner),
-    Assert(Txn.rekey_to() == Global.zero_address()),
-    Assert(Txn.close_remainder_to() == Global.zero_address()),
-    Assert(Txn.asset_close_to() == Global.zero_address()),
+@Subroutine(TealType.none)
+def set_reserved_price_state(assetID, price):
     return Seq(
-        app.state.algo_balance.set(li.get()),
-        output.set("Updated local state!"),
+    app.state.priceDict1[Itob(assetID)].set(price),
+    Return()
     )
 
-@app.create(bare=True)
-def create():
-    on_create = Seq([
-        app.initialize_global_state(),
-        app.state.owner.set(Txn.sender()),
-    ])
-    return on_create
+@Subroutine(TealType.none)
+def set_reserved_artist_state(assetID,artistAddress):
+    return Seq (
+    app.state.artistDict[Itob(assetID)].set(artistAddress),
+    Return()
+    )
 
-@app.close_out(bare=True, authorize=Authorize.only(Global.creator_address()))
-def close_out():
-    Assert(Txn.sender() == Global.creator_address())
-    Assert(Txn.rekey_to() == Global.zero_address()),
-    Assert(Txn.close_remainder_to() == Global.zero_address()),
-    Assert(Txn.asset_close_to() == Global.zero_address()),
-    on_close = Seq([
-        Assert(app.state.owner.get() == Txn.sender()),  # Only owner can close out the vault
-        Approve()
-    ])
-    return on_close
-
-@app.opt_in(bare=True)
-def opt_in():
-    Assert(Txn.rekey_to() == Global.zero_address()),
-    Assert(Txn.close_remainder_to() == Global.zero_address()),
-    Assert(Txn.asset_close_to() == Global.zero_address()),
-    return app.initialize_local_state()
-
-@app.external
-def deposit_asa(amount: abi.Uint64, *,output: abi.String):
-    Assert(Txn.rekey_to() == Global.zero_address()),
-    Assert(Txn.close_remainder_to() == Global.zero_address()),
-    Assert(Txn.asset_close_to() == Global.zero_address()),
-    deposit = Seq([
-        Assert(Txn.sender() == app.state.owner.get()),  # Only owner can deposit ASAs
-        app.state.asa_balance.set(app.state.asa_balance.get() + amount.get()),
-        output.set("Updated asa value")
-    ])
-    return deposit
-
-@app.external
-def withdraw_asa(amount: abi.Uint64, *,output: abi.String):
-    withdraw = Seq([
-        Assert(Txn.rekey_to() == Global.zero_address()),
-        Assert(Txn.close_remainder_to() == Global.zero_address()),
-        Assert(Txn.asset_close_to() == Global.zero_address()),
-        Assert(Txn.sender() == app.state.owner.get()),  # Only owner can withdraw ASAs
-        Assert(app.state.asa_balance.get() >= amount.get()),  # Check if there are enough ASAs in the vault
-        app.state.asa_balance.set(app.state.asa_balance.get() - amount.get()),
-        output.set("updated asa value")
-    ])
-    return withdraw
-
-@app.external
-def update_deposit_algos(amount: abi.Uint64, *, output: abi.String):
-    Assert(Txn.rekey_to() == Global.zero_address()),
-    Assert(Txn.close_remainder_to() == Global.zero_address()),
-    Assert(Txn.asset_close_to() == Global.zero_address()),
-    deposit = Seq([
-        Assert(Txn.sender() == app.state.owner.get()),  # Only owner can deposit Algos
-        app.state.algo_balance.set(app.state.algo_balance.get() + amount.get()),
-        output.set("updated algos value")
-    ])
-    return deposit
-
-@app.external
-def update_withdraw_algos(amount: abi.Uint64, *,output: abi.String):
-    Assert(Txn.rekey_to() == Global.zero_address()),
-    Assert(Txn.close_remainder_to() == Global.zero_address()),
-    Assert(Txn.asset_close_to() == Global.zero_address()),
-    withdraw = Seq([
-        Assert(Txn.sender() == app.state.owner.get()),  # Only owner can withdraw Algos
-        Assert(app.state.algo_balance.get() >= amount.get()),  # Check if there are enough Algos in the vault
-        app.state.algo_balance.set(app.state.algo_balance.get() - amount.get()),
-        output.set("updated algos value")
-    ])
-    return withdraw
-
-@app.external
-def transferasafromvault(*, output: abi.String):
-    Assert(Txn.rekey_to() == Global.zero_address()),
-    Assert(Txn.close_remainder_to() == Global.zero_address()),
-    Assert(Txn.asset_close_to() == Global.zero_address()),
-    close = Seq([
-        Assert(Txn.sender() == app.state.owner.get()),  # Only owner can close out ASAs
-        Assert(app.state.asa_balance.get() > Int(0)),  # Check if there are ASAs in the vault
-    ])
-    
-    on_close = Seq([
-        InnerTxnBuilder.Begin(),
-        InnerTxnBuilder.SetFields(
-            {
-                TxnField.type_enum: TxnType.AssetTransfer,
-                TxnField.xfer_asset: Txn.assets[0],  # ASA index
-                TxnField.asset_receiver: Global.creator_address(),
-                TxnField.asset_amount: Int(1),
-            }
-        ),
-        InnerTxnBuilder.Submit(),
-        output.set("Transferred ASA!")
-    ])
-    
-    return Seq([close, on_close])
-
-@app.external
-def transferasafromvaultwithoutclose(*, output: abi.String):
-    Assert(Txn.rekey_to() == Global.zero_address()),
-    Assert(Txn.close_remainder_to() == Global.zero_address()),
-    Assert(Txn.asset_close_to() == Global.zero_address()),
-    close = Seq([
-        Assert(Txn.sender() == Global.current_application_address()),  # Only owner can close out ASAs
-        Assert(app.state.asa_balance.get() > Int(0)),  # Check if there are ASAs in the vault
-    ])
-    
-    on_close = Seq([
-        InnerTxnBuilder.Begin(),
-        InnerTxnBuilder.SetFields(
-            {
-                TxnField.type_enum: TxnType.AssetTransfer,
-                TxnField.xfer_asset: Txn.assets[0],  # ASA index
-                TxnField.asset_receiver: Global.creator_address(),
-                TxnField.asset_amount: Int(1),
-            }
-        ),
-        InnerTxnBuilder.Submit(),
-        output.set("Transferred ASA!")
-    ])
-    
-    return Seq([close, on_close])
-
-@app.external
-def depositasatovault(*, output: abi.String):
-    Assert(Txn.rekey_to() == Global.zero_address()),
-    Assert(Txn.close_remainder_to() == Global.zero_address()),
-    Assert(Txn.asset_close_to() == Global.zero_address()),
-    close = Seq([
-        Assert(Txn.sender() == Global.creator_address()),  
-    ])
-    
-    on_close = Seq([
-        InnerTxnBuilder.Begin(),
-        InnerTxnBuilder.SetFields(
-            {
-                TxnField.type_enum: TxnType.AssetTransfer,
-                TxnField.xfer_asset: Txn.assets[0],  # ASA index
-                TxnField.asset_sender: Global.creator_address(),
-                TxnField.asset_receiver: Global.current_application_address(),
-                TxnField.asset_amount: Int(1),
-            }
-        ),
-        InnerTxnBuilder.Submit(),
-        output.set("Transferred ASA!")
-    ])
-    
-    return Seq([close, on_close])
-
-@app.external
-def optintoasset(*, output: abi.String):
-    Assert(Txn.rekey_to() == Global.zero_address()),
-    Assert(Txn.close_remainder_to() == Global.zero_address()),
-    Assert(Txn.asset_close_to() == Global.zero_address()),
-    close = Seq([
-        Assert(Txn.sender() == app.state.owner.get()),  
-    ])
-    
-    on_close = Seq([
-        InnerTxnBuilder.Begin(),
-        InnerTxnBuilder.SetFields(
-            {
-                TxnField.type_enum: TxnType.AssetTransfer,
-                TxnField.xfer_asset: Txn.assets[0],  # ASA index
-                TxnField.asset_receiver: Global.current_application_address(),
-                TxnField.asset_amount: Int(0),
-            }
-        ),
-        InnerTxnBuilder.Submit(),
-        output.set("ASA Opted in!")
-    ])
-    
-    return Seq([close, on_close])
-
-@app.external
-def sendasatobuyer(*, output: abi.String):
-    Assert(Txn.rekey_to() == Global.zero_address()),
-    Assert(Txn.close_remainder_to() == Global.zero_address()),
-    Assert(Txn.asset_close_to() == Global.zero_address()),
-    return Seq(
-        Assert(Txn.sender() == app.state.owner.get()),
-        # Transfer Asset
-        InnerTxnBuilder.Begin(),
-        InnerTxnBuilder.SetFields(
-            {
-                TxnField.type_enum: TxnType.AssetTransfer,
-                TxnField.xfer_asset: Txn.assets[0],  # first foreign asset
-                TxnField.asset_receiver: Txn.accounts[1],
-                TxnField.asset_amount: Int(1),
-            }
-        ),
-        InnerTxnBuilder.Submit(),
-        output.set("Transferred!"),
+@Subroutine(TealType.uint64)
+def basic_checks():
+    return And(
+        Txn.rekey_to() == Global.zero_address(),
+        Txn.close_remainder_to() == Global.zero_address(),
+        Txn.asset_close_to() == Global.zero_address(),
     )
 
 @app.external
-def sendasatobuyercloseout(*, output: abi.String):
-    Assert(Txn.rekey_to() == Global.zero_address()),
-    Assert(Txn.close_remainder_to() == Global.zero_address()),
-    Assert(Txn.asset_close_to() == Global.zero_address()),
+def create_nft(
+    assetName: abi.String,
+    assetURL: abi.String,
+    numNFTs: abi.Uint64,
+    sellingPrice: abi.Uint64,
+    activeAddress: abi.String,
+    metadataEncoded: abi.String,
+    *,
+    output: abi.Uint64
+    ):
     return Seq(
-        Assert(Txn.sender() == app.state.owner.get()),
-        # Transfer Asset
-        InnerTxnBuilder.Begin(),
-        InnerTxnBuilder.SetFields(
-            {
-                TxnField.type_enum: TxnType.AssetTransfer,
-                TxnField.xfer_asset: Txn.assets[0],  # first foreign asset
-                TxnField.asset_receiver: Txn.accounts[1],
-                TxnField.asset_close_to: Txn.accounts[1],
-                TxnField.asset_amount: Int(1),
-            }
-        ),
-        InnerTxnBuilder.Submit(),
-        output.set("Transferred!"),
-    )
-
-@app.external
-def depositalgos(amount: abi.Uint64, *, output: abi.String):
-    Assert(Txn.rekey_to() == Global.zero_address()),
-    Assert(Txn.close_remainder_to() == Global.zero_address()),
-    Assert(Txn.asset_close_to() == Global.zero_address()),
-    return Seq(
+        Assert(basic_checks()),
+        Assert(Gtxn[0].type_enum() == TxnType.Payment),
         Assert(Txn.sender() == Global.creator_address()),
+        Assert(numNFTs.get() > Int(0)),
+        Assert(sellingPrice.get() > Int(0)),
         InnerTxnBuilder.Begin(),
         InnerTxnBuilder.SetFields(
             {
-                TxnField.type_enum: TxnType.Payment,
-                TxnField.receiver: Txn.accounts[0],
-                TxnField.asset_amount: amount.get(),
+                TxnField.type_enum: TxnType.AssetConfig,
+                TxnField.config_asset_default_frozen: Int(0),
+                TxnField.config_asset_url: assetURL.get(),
+                TxnField.config_asset_name: assetName.get(),
+                TxnField.config_asset_unit_name: Bytes("arc69"),
+                TxnField.config_asset_total: numNFTs.get(), # Artist can choose how many copies of NFT to create
+                TxnField.config_asset_decimals: Int(0),
+                TxnField.note: metadataEncoded.get(),
+                TxnField.fee: Int(0),
             }
         ),
         InnerTxnBuilder.Submit(),
-        output.set("Algos transferred")
+        set_reserved_price_state(InnerTxn.created_asset_id(),sellingPrice.get()), # Add assetID (key) and price (value) to priceDict1
+        set_reserved_artist_state(InnerTxn.created_asset_id(),activeAddress.get()), # Add assetID (key) and artistAddress (value) to artistDict
+        output.set(InnerTxn.created_asset_id())
     )
 
 @app.external
-def receivealgos(amount: abi.Uint64, *,output: abi.String):
-    Assert(Txn.rekey_to() == Global.zero_address()),
-    Assert(Txn.close_remainder_to() == Global.zero_address()),
-    Assert(Txn.asset_close_to() == Global.zero_address()),
-    Assert(Txn.sender() == Txn.accounts[0])
+def purchase_nft(assetID: abi.Uint64, feeAmount:abi.Uint64, fee: abi.Uint64, *, output:abi.String):
+    contractassetbalance = AssetHolding.balance(Global.current_application_address(), Txn.assets[0])
+    receiverassetbalance = AssetHolding.balance(Txn.sender(), Txn.assets[0])
+    deployerfee = App.globalGetEx(Txn.applications[1], Bytes("platformFee"))
     return Seq(
+        Assert(basic_checks()),
+        deployerfee,
+        Assert(deployerfee.value() == fee.get()),
+        contractassetbalance,
+        Assert(contractassetbalance.value() >= Int(1)),
+        receiverassetbalance,
+        Assert(receiverassetbalance.hasValue()),
+        Assert(Balance(Gtxn[0].sender()) >= get_price(assetID.get())), # Check if buyer has enough algos to buy NFT 
+        Assert(Gtxn[0].type_enum() == TxnType.Payment),  #check txntype
+        Assert(Txn.assets[0] == assetID.get()),
+
+        #Transfer platform fees algos from NFT contract to creator contract
         InnerTxnBuilder.Begin(),
         InnerTxnBuilder.SetFields(
             {
                 TxnField.type_enum: TxnType.Payment,
-                TxnField.receiver: Global.creator_address(),
-                TxnField.amount: amount.get(),
+                TxnField.amount: feeAmount.get(),  # fee amount to be paid to master contract
+                TxnField.receiver: Txn.accounts[1],
+                TxnField.fee: Int(0),
+                
             }
         ),
         InnerTxnBuilder.Submit(),
-        output.set("Algos transferred")
+
+        #Transfer NFT from contract account to buyer
+
+        InnerTxnBuilder.Begin(),
+        InnerTxnBuilder.SetFields(
+            {
+                TxnField.type_enum: TxnType.AssetTransfer,
+                TxnField.xfer_asset: Txn.assets[0],  # saved assetID to assets array when calling this function
+                TxnField.asset_receiver: Txn.sender(), # sender is the buyer who called this function
+                TxnField.asset_amount: Int(1),
+                TxnField.fee: Int(0),
+                
+            }
+        ),
+        InnerTxnBuilder.Submit(),
+        output.set("Transferred!"),
     )
 
-
+@app.external(authorize=Authorize.only(Global.creator_address()))
+def transferEarnings(amount: abi.Uint64, *, output: abi.String):
+    #Transfer algos from contract account to content creator
+    return Seq(
+        Assert(basic_checks()),
+        Assert(amount.get() > Int(0)), # cannot withdraw if amount to transfer is 0
+        InnerTxnBuilder.Begin(),
+        InnerTxnBuilder.SetFields(
+            {
+                TxnField.type_enum: TxnType.Payment,
+                TxnField.amount: amount.get(),  # algos to transfer
+                TxnField.receiver: app.state.owner.get(),
+                TxnField.fee: Int(0),
+            }
+        ),
+        InnerTxnBuilder.Submit(),
+        output.set("Earnings transferred!"),
+    )
 
 APP_NAME = "nft-marketplace"
 

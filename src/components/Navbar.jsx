@@ -1,5 +1,14 @@
 import React from "react";
 import DropdownMenu from "./DropdownMenu";
+import Button from "./Button";
+import { useWallet } from "@txnlab/use-wallet";
+import { useState } from "react";
+import { getAlgodClient } from "../clients";
+import { withdrawearnings } from "@/algorand";
+
+const network = process.env.NEXT_PUBLIC_NETWORK || "SandNet";   
+
+
 
 export default function Navbar() {
     return (

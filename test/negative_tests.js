@@ -1,9 +1,13 @@
 import chai from "chai";
 import chaiAsPromised from "chai-as-promised";
-import algosdk, { mnemonicToSecretKey } from "algosdk";
-import * as algotxn from "../scripts/index.js";
-
-let assetID = 8461;
+import algosdk, {
+  getApplicationAddress,
+  makeBasicAccountTransactionSigner,
+} from "algosdk";
+const algotxn = require("../src/algorand/index");
+import { deployDemoApp } from "../scripts/index.js";
+import * as path from "path";
+import * as fs from "fs";
 
 // use chai-as-promise library
 chai.use(chaiAsPromised);
@@ -16,323 +20,637 @@ const algodClient = new algosdk.Algodv2(
 );
 
 describe("Negative Tests", function () {
-  // write your code here
-  let appID, appAddress;
-  //if creator is another account
+  let appID, appAddress, nftcontract, nftcontractid;
   const creator = algosdk.mnemonicToSecretKey(
     process.env.NEXT_PUBLIC_DEPLOYER_MNEMONIC
   );
   const alt = algosdk.generateAccount();
+  const seller = algosdk.generateAccount();
+  const buyer = algosdk.generateAccount();
   this.beforeEach(async () => {
     // deploy app
-    const { confirmation } = await algotxn.deployDemoApp(creator);
+    const { confirmation } = await deployDemoApp(creator, 10);
     appID = confirmation["application-index"];
 
-    // fund contract and alt address with 1.1 Algos
+    // fund all accounts
     appAddress = algosdk.getApplicationAddress(appID);
-    await algotxn.fundAccount(creator, appAddress, 1e6 + 1e5);
-    await algotxn.fundAccount(creator, alt.addr, 1e6 + 1e5);
+    await algotxn.fundAccount(creator, appAddress, 2e7 + 1e5);
+    await algotxn.fundAccount(creator, alt.addr, 2e7 + 1e5);
+    await algotxn.fundAccount(creator, buyer.addr, 2e7 + 1e5);
+    await algotxn.fundAccount(creator, seller.addr, 2e7 + 1e5);
   });
 
-  it("Non owner cannot send ASAs to the vault", async () => {
-    // write your code here
+  it("Non owner cannot mint NFT on contract they do not own", async () => {
     const suggestedParams = await algodClient.getTransactionParams().do();
-    const commonParams = {
-      appID,
-      sender: alt.addr,
-      suggestedParams,
-      signer: algosdk.makeBasicAccountTransactionSigner(alt),
-    };
-    await algotxn.optIntoApp(alt, appID);
-    const txn1 = [
-      {
-        method: algotxn.getMethod("optintoasset"),
-        ...commonParams,
-        appForeignAssets: [assetID],
-      },
-    ];
+    suggestedParams.fee = 2 * algosdk.ALGORAND_MIN_TX_FEE;
+    const data1 = path.join(
+      __dirname,
+      "../assets/artifacts/nft-marketplace/approval.teal"
+    );
 
-    await expect(algotxn.makeATCCall(txn1)).to.be.rejectedWith(Error);
-    // transfer ASA
-    let nfttxn = [
-      await algotxn.createAssetTransferTxn(
-        algodClient,
-        alt.addr,
-        appAddress,
-        parseInt(assetID),
-        1
-      ),
-    ];
+    const approval = fs.readFileSync(data1);
+    const approvalpath = await algotxn.getBasicProgramBytes(approval);
 
-    const groupedTxn = algosdk.assignGroupID(nfttxn);
-    // Sign
-    const signedTxns = groupedTxn.map((txn) => txn.signTxn(alt.sk));
+    const data2 = path.join(
+      __dirname,
+      "../assets/artifacts/nft-marketplace/clear.teal"
+    );
 
-    const response = await expect(
-      algodClient.sendRawTransaction(signedTxns).do()
-    ).to.be.rejectedWith(Error);
-    const confirmation = expect(
-      algosdk.waitForConfirmation(algodClient, response.txId, 4)
-    ).to.be.rejectedWith(Error);
-    const txn2 = [
-      {
-        method: algotxn.getMethod("deposit_asa"),
-        ...commonParams,
-        methodArgs: [1],
-      },
-    ];
-    await expect(algotxn.makeATCCall(txn2)).to.be.rejectedWith(Error);
+    const clear = fs.readFileSync(data2);
+    const clearpath = await algotxn.getBasicProgramBytes(clear);
+    const txn = await algotxn.deployNFTContract(
+      seller.addr,
+      approvalpath,
+      clearpath,
+      32,
+      32
+    );
 
-    const txn3 = [
-      {
-        method: algotxn.getMethod("update_deposit_algos"),
-        ...commonParams,
-        methodArgs: [100000],
-      },
-    ];
+    nftcontract = await algotxn.signAndSubmit(algodClient, [txn], seller);
+    nftcontractid = Number(nftcontract.confirmation["application-index"]);
 
-    await expect(algotxn.makeATCCall(txn3)).to.be.rejectedWith(Error);
-  });
+    const MBR = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
+      from: seller.addr,
+      to: algosdk.getApplicationAddress(nftcontractid),
+      amount: 200000,
+      suggestedParams: suggestedParams,
+    });
 
-  it("Non owner cannot transfer ASAs from the vault", async () => {
-    // write your code here
-    const suggestedParams = await algodClient.getTransactionParams().do();
-    const commonParams = {
-      appID,
-      sender: alt.addr,
-      suggestedParams,
-      signer: algosdk.makeBasicAccountTransactionSigner(alt),
-    };
-    await algotxn.optIntoApp(creator, appID);
-    const opt = [
-      {
-        method: algotxn.getMethod("optintoasset"),
-        appID,
-        sender: creator.addr,
-        suggestedParams,
-        signer: algosdk.makeBasicAccountTransactionSigner(creator),
-        appForeignAssets: [assetID],
-      },
-    ];
+    await algotxn.signAndSubmit(algodClient, [MBR], seller);
+    //generate random collection name
+    let contractName = Math.random().toString(36).substring(2, 7);
 
-    await algotxn.makeATCCall(opt);
-    // transfer ASA
-    let nfttxn = [
-      await algotxn.createAssetTransferTxn(
-        algodClient,
-        creator.addr,
-        appAddress,
-        parseInt(assetID),
-        1
-      ),
-    ];
-    console.log(nfttxn);
-    const groupedTxns = algosdk.assignGroupID(nfttxn);
-
-    // Sign
-    const signedTxn = groupedTxns.map((txn) => txn.signTxn(creator.sk));
-    const resp = await algodClient.sendRawTransaction(signedTxn).do();
-
-    const confirm = await algosdk.waitForConfirmation(
+    await algotxn.updatecontracts(
       algodClient,
-      resp.txId,
-      4
-    );
-    console.log(confirm);
-
-    const deposit = [
-      {
-        method: algotxn.getMethod("deposit_asa"),
-        appID,
-        sender: creator.addr,
-        suggestedParams,
-        signer: algosdk.makeBasicAccountTransactionSigner(creator),
-        methodArgs: [1],
-      },
-    ];
-    await algotxn.makeATCCall(deposit);
-
-    await algotxn.optIntoAsset(alt, assetID);
-
-    const txn1 = [
-      {
-        method: algotxn.getMethod("sendasatobuyer"),
-        ...commonParams,
-        appForeignAssets: [assetID],
-        appAccounts: [alt.addr],
-      },
-    ];
-    await expect(algotxn.makeATCCall(txn1)).to.be.rejectedWith(Error);
-
-    const txn2 = [
-      {
-        method: algotxn.getMethod("update_withdraw_algos"),
-        ...commonParams,
-        methodArgs: [100000],
-      },
-    ];
-
-    await expect(algotxn.makeATCCall(txn2)).to.be.rejectedWith(Error);
-
-    const txn3 = [
-      {
-        method: algotxn.getMethod("withdraw_asa"),
-        ...commonParams,
-        methodArgs: [1],
-      },
-    ];
-
-    await expect(algotxn.makeATCCall(txn3)).to.be.rejectedWith(Error);
-
-    await algotxn.optIntoAsset(creator, assetID);
-
-    // transfer NFT
-    const withdraw = [
-      {
-        method: algotxn.getMethod("transferasafromvault"),
-        appID,
-        sender: creator.addr,
-        suggestedParams,
-        signer: algosdk.makeBasicAccountTransactionSigner(creator),
-        appForeignAssets: [assetID],
-      },
-    ];
-
-    await algotxn.makeATCCall(withdraw);
-  });
-
-  it("Non owner cannot close out ASAs from the vault", async () => {
-    const suggestedParams = await algodClient.getTransactionParams().do();
-    const commonParams = {
+      contractName,
       appID,
-      sender: alt.addr,
-      suggestedParams,
-      signer: algosdk.makeBasicAccountTransactionSigner(alt),
-    };
-    await algotxn.optIntoApp(creator, appID);
-    const opt = [
-      {
-        method: algotxn.getMethod("optintoasset"),
-        appID,
-        sender: creator.addr,
-        suggestedParams,
-        signer: algosdk.makeBasicAccountTransactionSigner(creator),
-        appForeignAssets: [assetID],
-      },
-    ];
+      nftcontractid,
+      seller.addr,
+      algosdk.makeBasicAccountTransactionSigner(seller)
+    );
 
-    await algotxn.makeATCCall(opt);
-    // transfer ASA
-    let nfttxn = [
-      await algotxn.createAssetTransferTxn(
+    const dateminted = new Date();
+
+    // Creating metadata for NFT
+    const metadata = {
+      creator: buyer.addr,
+      price: 1,
+      standard: "arc69",
+      description: "test",
+      external_url: `ipfs://hash/#i}`,
+      mime_type: "image/jpg",
+      license: {
+        minted: dateminted.toISOString().split("T")[0],
+      },
+      properties: "test",
+    };
+
+    const jsontToUint8array = (json) => {
+      const jsonString = JSON.stringify(json);
+      const encoder = new TextEncoder();
+      const uint8Array = encoder.encode(jsonString);
+      return uint8Array;
+    };
+
+    const metadataEncoded = jsontToUint8array(metadata);
+
+    //buyer attempt to mint nft on seller's created contract
+    await expect(
+      algotxn.createNft(
+        nftcontractid,
+        buyer.addr,
+        suggestedParams,
+        algosdk.makeBasicAccountTransactionSigner(seller),
+        "test",
+        metadata.external_url,
+        1,
+        1,
+        metadataEncoded,
+        algodClient
+      )
+    ).to.be.rejectedWith(Error);
+  });
+  it("Non owner cannot withdraw earnings from master contract earnings", async () => {
+    await algotxn.fundAccount(creator, getApplicationAddress(appID), 10e7);
+    //seller attempt to withdraw from platform contract
+    await expect(
+      algotxn.deployerwithdraw(
         algodClient,
-        creator.addr,
-        appAddress,
-        parseInt(assetID),
-        1
-      ),
-    ];
-    console.log(nfttxn);
-    const groupedTxns = algosdk.assignGroupID(nfttxn);
-
-    // Sign
-    const signedTxn = groupedTxns.map((txn) => txn.signTxn(creator.sk));
-    const resp = await algodClient.sendRawTransaction(signedTxn).do();
-
-    const confirm = await algosdk.waitForConfirmation(
-      algodClient,
-      resp.txId,
-      4
-    );
-    console.log(confirm);
-
-    const deposit = [
-      {
-        method: algotxn.getMethod("deposit_asa"),
         appID,
-        sender: creator.addr,
-        suggestedParams,
-        signer: algosdk.makeBasicAccountTransactionSigner(creator),
-        methodArgs: [1],
-      },
-    ];
-    await algotxn.makeATCCall(deposit);
-
-    await algotxn.optIntoAsset(alt, assetID);
-
-    const txn1 = [
-      {
-        method: algotxn.getMethod("sendasatobuyercloseout"),
-        ...commonParams,
-        appForeignAssets: [assetID],
-        appAccounts: [alt.addr],
-      },
-    ];
-    await expect(algotxn.makeATCCall(txn1)).to.be.rejectedWith(Error);
-
-    const txn2 = [
-      {
-        method: algotxn.getMethod("update_withdraw_algos"),
-        ...commonParams,
-        methodArgs: [100000],
-      },
-    ];
-
-    await expect(algotxn.makeATCCall(txn2)).to.be.rejectedWith(Error);
-
-    const txn3 = [
-      {
-        method: algotxn.getMethod("withdraw_asa"),
-        ...commonParams,
-        methodArgs: [1],
-      },
-    ];
-
-    await expect(algotxn.makeATCCall(txn3)).to.be.rejectedWith(Error);
-
-    await expect(algotxn.readLocalState(alt.addr, appID)).to.be.rejectedWith(
-      Error
-    );
-
-    await algotxn.optIntoApp(creator, appID);
-    //check whether asset is closed out by the alt account
-    const updatedappinfo = await algotxn.accountInfo(appAddress);
-    assert.equal(updatedappinfo.assets.length, 1);
-    await algotxn.optIntoAsset(creator, assetID);
-    // transfer NFT
-    const withdraw = [
-      {
-        method: algotxn.getMethod("transferasafromvault"),
-        appID,
-        sender: creator.addr,
-        suggestedParams,
-        signer: algosdk.makeBasicAccountTransactionSigner(creator),
-        appForeignAssets: [assetID],
-      },
-    ];
-
-    await algotxn.makeATCCall(withdraw);
+        seller.addr,
+        makeBasicAccountTransactionSigner(seller)
+      )
+    ).to.be.rejectedWith(Error);
   });
 
-  it("Non owner cannot change owner address", async () => {
-    // write your code here
+  it("Non owner cannot withdraw earnings from NFT contract they do not own", async () => {
     const suggestedParams = await algodClient.getTransactionParams().do();
-    const commonParams = {
-      appID,
-      sender: alt.addr,
-      suggestedParams,
-      signer: algosdk.makeBasicAccountTransactionSigner(alt),
-    };
-    await algotxn.optIntoApp(alt, appID);
+    suggestedParams.fee = 2 * algosdk.ALGORAND_MIN_TX_FEE;
+    const data1 = path.join(
+      __dirname,
+      "../assets/artifacts/nft-marketplace/approval.teal"
+    );
 
-    // write your code here
-    const txn = [
+    const approval = fs.readFileSync(data1);
+    const approvalpath = await algotxn.getBasicProgramBytes(approval);
+
+    const data2 = path.join(
+      __dirname,
+      "../assets/artifacts/nft-marketplace/clear.teal"
+    );
+
+    const clear = fs.readFileSync(data2);
+    const clearpath = await algotxn.getBasicProgramBytes(clear);
+    const txn = await algotxn.deployNFTContract(
+      seller.addr,
+      approvalpath,
+      clearpath,
+      32,
+      32
+    );
+
+    nftcontract = await algotxn.signAndSubmit(algodClient, [txn], seller);
+    nftcontractid = Number(nftcontract.confirmation["application-index"]);
+
+    await algotxn.fundAccount(
+      creator,
+      getApplicationAddress(nftcontractid, 10e7)
+    );
+    //buyer attempt to withdraw from seller's deployed NFT contract
+    await expect(
+      algotxn.contentcreatorwithdraw(
+        algodClient,
+        appID,
+        buyer.addr,
+        makeBasicAccountTransactionSigner(buyer)
+      )
+    ).to.be.rejectedWith(Error);
+  });
+  it("Mint 0 NFT fails", async () => {
+    const suggestedParams = await algodClient.getTransactionParams().do();
+    suggestedParams.fee = 2 * algosdk.ALGORAND_MIN_TX_FEE;
+    const data1 = path.join(
+      __dirname,
+      "../assets/artifacts/nft-marketplace/approval.teal"
+    );
+
+    const approval = fs.readFileSync(data1);
+    const approvalpath = await algotxn.getBasicProgramBytes(approval);
+
+    const data2 = path.join(
+      __dirname,
+      "../assets/artifacts/nft-marketplace/clear.teal"
+    );
+
+    const clear = fs.readFileSync(data2);
+    const clearpath = await algotxn.getBasicProgramBytes(clear);
+    const txn = await algotxn.deployNFTContract(
+      seller.addr,
+      approvalpath,
+      clearpath,
+      32,
+      32
+    );
+
+    nftcontract = await algotxn.signAndSubmit(algodClient, [txn], seller);
+    nftcontractid = Number(nftcontract.confirmation["application-index"]);
+
+    const MBR = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
+      from: seller.addr,
+      to: algosdk.getApplicationAddress(nftcontractid),
+      amount: 200000,
+      suggestedParams: suggestedParams,
+    });
+
+    await algotxn.signAndSubmit(algodClient, [MBR], seller);
+    //generate random collection name
+    let contractName = Math.random().toString(36).substring(2, 7);
+
+    await algotxn.updatecontracts(
+      algodClient,
+      contractName,
+      appID,
+      nftcontractid,
+      seller.addr,
+      algosdk.makeBasicAccountTransactionSigner(seller)
+    );
+
+    const dateminted = new Date();
+
+    // Creating metadata for NFT
+    const metadata = {
+      creator: seller.addr,
+      price: 1,
+      standard: "arc69",
+      description: "test",
+      external_url: `ipfs://hash/#i}`,
+      mime_type: "image/jpg",
+      license: {
+        minted: dateminted.toISOString().split("T")[0],
+      },
+      properties: "test",
+    };
+
+    const jsontToUint8array = (json) => {
+      const jsonString = JSON.stringify(json);
+      const encoder = new TextEncoder();
+      const uint8Array = encoder.encode(jsonString);
+      return uint8Array;
+    };
+
+    const metadataEncoded = jsontToUint8array(metadata);
+    //attempt to mint 0 number of NFTs
+    await expect(
+      algotxn.createNft(
+        nftcontractid,
+        seller.addr,
+        suggestedParams,
+        algosdk.makeBasicAccountTransactionSigner(seller),
+        "test",
+        metadata.external_url,
+        0,
+        1,
+        metadataEncoded,
+        algodClient
+      )
+    ).to.be.rejectedWith(Error);
+  });
+
+  it("Set invalid selling price for NFT fails", async () => {
+    const suggestedParams = await algodClient.getTransactionParams().do();
+    suggestedParams.fee = 2 * algosdk.ALGORAND_MIN_TX_FEE;
+    const data1 = path.join(
+      __dirname,
+      "../assets/artifacts/nft-marketplace/approval.teal"
+    );
+
+    const approval = fs.readFileSync(data1);
+    const approvalpath = await algotxn.getBasicProgramBytes(approval);
+
+    const data2 = path.join(
+      __dirname,
+      "../assets/artifacts/nft-marketplace/clear.teal"
+    );
+
+    const clear = fs.readFileSync(data2);
+    const clearpath = await algotxn.getBasicProgramBytes(clear);
+    const txn = await algotxn.deployNFTContract(
+      seller.addr,
+      approvalpath,
+      clearpath,
+      32,
+      32
+    );
+
+    nftcontract = await algotxn.signAndSubmit(algodClient, [txn], seller);
+    nftcontractid = Number(nftcontract.confirmation["application-index"]);
+
+    const MBR = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
+      from: seller.addr,
+      to: algosdk.getApplicationAddress(nftcontractid),
+      amount: 200000,
+      suggestedParams: suggestedParams,
+    });
+
+    await algotxn.signAndSubmit(algodClient, [MBR], seller);
+    //generate random collection name
+    let contractName = Math.random().toString(36).substring(2, 7);
+
+    await algotxn.updatecontracts(
+      algodClient,
+      contractName,
+      appID,
+      nftcontractid,
+      seller.addr,
+      algosdk.makeBasicAccountTransactionSigner(seller)
+    );
+
+    const dateminted = new Date();
+
+    // Creating metadata for NFT
+    const metadata = {
+      creator: seller.addr,
+      price: 1,
+      standard: "arc69",
+      description: "test",
+      external_url: `ipfs://hash/#i}`,
+      mime_type: "image/jpg",
+      license: {
+        minted: dateminted.toISOString().split("T")[0],
+      },
+      properties: "test",
+    };
+
+    const jsontToUint8array = (json) => {
+      const jsonString = JSON.stringify(json);
+      const encoder = new TextEncoder();
+      const uint8Array = encoder.encode(jsonString);
+      return uint8Array;
+    };
+
+    const metadataEncoded = jsontToUint8array(metadata);
+    //attempt to set selling price as 0
+    await expect(
+      algotxn.createNft(
+        nftcontractid,
+        seller.addr,
+        suggestedParams,
+        algosdk.makeBasicAccountTransactionSigner(seller),
+        "test",
+        metadata.external_url,
+        1,
+        0,
+        metadataEncoded,
+        algodClient
+      )
+    ).to.be.rejectedWith(Error);
+  });
+
+  it("Buyer buy NFT without enough algos fails", async () => {
+    const suggestedParams = await algodClient.getTransactionParams().do();
+    suggestedParams.fee = 2 * algosdk.ALGORAND_MIN_TX_FEE;
+    //create account with zero algos
+    const poor_buyer = algosdk.generateAccount();
+    const data1 = path.join(
+      __dirname,
+      "../assets/artifacts/nft-marketplace/approval.teal"
+    );
+
+    const approval = fs.readFileSync(data1);
+    const approvalpath = await algotxn.getBasicProgramBytes(approval);
+
+    const data2 = path.join(
+      __dirname,
+      "../assets/artifacts/nft-marketplace/clear.teal"
+    );
+
+    const clear = fs.readFileSync(data2);
+    const clearpath = await algotxn.getBasicProgramBytes(clear);
+    const txn = await algotxn.deployNFTContract(
+      seller.addr,
+      approvalpath,
+      clearpath,
+      32,
+      32
+    );
+
+    nftcontract = await algotxn.signAndSubmit(algodClient, [txn], seller);
+    nftcontractid = Number(nftcontract.confirmation["application-index"]);
+
+    const MBR = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
+      from: seller.addr,
+      to: algosdk.getApplicationAddress(nftcontractid),
+      amount: 200000,
+      suggestedParams: suggestedParams,
+    });
+
+    await algotxn.signAndSubmit(algodClient, [MBR], seller);
+    //generate random collection name
+    let contractName = Math.random().toString(36).substring(2, 7);
+
+    await algotxn.updatecontracts(
+      algodClient,
+      contractName,
+      appID,
+      nftcontractid,
+      seller.addr,
+      algosdk.makeBasicAccountTransactionSigner(seller)
+    );
+
+    const dateminted = new Date();
+
+    let price = 1;
+    // Creating metadata for NFT
+    const metadata = {
+      creator: seller.addr,
+      price: price,
+      standard: "arc69",
+      description: "test",
+      external_url: `ipfs://hash/#i}`,
+      mime_type: "image/jpg",
+      license: {
+        minted: dateminted.toISOString().split("T")[0],
+      },
+      properties: "test",
+    };
+
+    const jsontToUint8array = (json) => {
+      const jsonString = JSON.stringify(json);
+      const encoder = new TextEncoder();
+      const uint8Array = encoder.encode(jsonString);
+      return uint8Array;
+    };
+
+    const metadataEncoded = jsontToUint8array(metadata);
+
+    const result = await algotxn.createNft(
+      nftcontractid,
+      seller.addr,
+      suggestedParams,
+      algosdk.makeBasicAccountTransactionSigner(seller),
+      "test",
+      metadata.external_url,
+      1,
+      1,
+      metadataEncoded,
+      algodClient
+    );
+
+    const assetID = result[0];
+
+    //buyer opts into asset
+    const optInTxn = algosdk.makeAssetTransferTxnWithSuggestedParamsFromObject({
+      from: poor_buyer.addr,
+      to: poor_buyer.addr,
+      suggestedParams,
+      assetIndex: assetID,
+      amount: 0,
+    });
+
+    //poor buyer attempts to opt into asset without enough MBR
+    await expect(
+      algotxn.signAndSubmit(algodClient, [optInTxn], poor_buyer)
+    ).to.be.rejectedWith(Error);
+
+    let globalState = await algotxn.readGlobalState(appID, algodClient);
+    const metadataString = JSON.stringify(metadata);
+    //buyer attempt to buy NFT
+    await expect(
+      algotxn.buyNft(
+        algodClient,
+        nftcontractid,
+        poor_buyer.addr,
+        algosdk.makeBasicAccountTransactionSigner(poor_buyer),
+        metadataString,
+        assetID,
+        globalState
+      )
+    ).to.be.rejectedWith(Error);
+  });
+
+  it("Seller create NFT without paying MBR fails", async () => {
+    const suggestedParams = await algodClient.getTransactionParams().do();
+    suggestedParams.fee = 2 * algosdk.ALGORAND_MIN_TX_FEE;
+    const data1 = path.join(
+      __dirname,
+      "../assets/artifacts/nft-marketplace/approval.teal"
+    );
+
+    const approval = fs.readFileSync(data1);
+    const approvalpath = await algotxn.getBasicProgramBytes(approval);
+
+    const data2 = path.join(
+      __dirname,
+      "../assets/artifacts/nft-marketplace/clear.teal"
+    );
+
+    const clear = fs.readFileSync(data2);
+    const clearpath = await algotxn.getBasicProgramBytes(clear);
+    const txn = await algotxn.deployNFTContract(
+      seller.addr,
+      approvalpath,
+      clearpath,
+      32,
+      32
+    );
+
+    nftcontract = await algotxn.signAndSubmit(algodClient, [txn], seller);
+    nftcontractid = Number(nftcontract.confirmation["application-index"]);
+
+    const MBR = algosdk.makePaymentTxnWithSuggestedParamsFromObject({
+      from: seller.addr,
+      to: algosdk.getApplicationAddress(nftcontractid),
+      amount: 200000,
+      suggestedParams: suggestedParams,
+    });
+
+    await algotxn.signAndSubmit(algodClient, [MBR], seller);
+    //generate random collection name
+    let contractName = Math.random().toString(36).substring(2, 7);
+
+    await algotxn.updatecontracts(
+      algodClient,
+      contractName,
+      appID,
+      nftcontractid,
+      seller.addr,
+      algosdk.makeBasicAccountTransactionSigner(seller)
+    );
+
+    const dateminted = new Date();
+
+    // Creating metadata for NFT
+    const metadata = {
+      creator: seller.addr,
+      price: 1,
+      standard: "arc69",
+      description: "test",
+      external_url: `ipfs://hash/#i}`,
+      mime_type: "image/jpg",
+      license: {
+        minted: dateminted.toISOString().split("T")[0],
+      },
+      properties: "test",
+    };
+
+    const jsontToUint8array = (json) => {
+      const jsonString = JSON.stringify(json);
+      const encoder = new TextEncoder();
+      const uint8Array = encoder.encode(jsonString);
+      return uint8Array;
+    };
+
+    const metadataEncoded = jsontToUint8array(metadata);
+
+    const commonParams = {
+      appID: nftcontractid,
+      sender: seller.addr,
+      suggestedParams,
+      signer: makeBasicAccountTransactionSigner(seller),
+    };
+    const createtxnwithoutMBR = [
       {
-        method: algotxn.getMethod("update_global"),
-        appAccounts: [alt.addr],
+        method: algotxn.getMethod("create_nft"),
+        methodArgs: [
+          "testname", // asset name
+          "test_url", // asset url
+          1,
+          1,
+          seller.addr,
+          metadataEncoded,
+        ],
         ...commonParams,
       },
     ];
-    await expect(algotxn.makeATCCall(txn)).to.be.rejectedWith(Error);
+    // attempt to create nft without paying MBR beforehand in ungrouped txn
+    await expect(
+      algotxn.makeATCCall(createtxnwithoutMBR, algodClient)
+    ).to.be.rejectedWith(Error);
+  });
+
+  it("Withdraw 0 algos from platform contract fails", async () => {
+    //attempt to withdraw earnings twice consecutively
+    await algotxn.deployerwithdraw(
+      algodClient,
+      appID,
+      creator.addr,
+      makeBasicAccountTransactionSigner(creator)
+    );
+    await expect(
+      algotxn.deployerwithdraw(
+        algodClient,
+        appID,
+        creator.addr,
+        makeBasicAccountTransactionSigner(creator)
+      )
+    ).to.be.rejectedWith(Error);
+  });
+
+  it("Withdraw 0 algos from NFT contract fails", async () => {
+    //deploy nft contract
+    const data1 = path.join(
+      __dirname,
+      "../assets/artifacts/nft-marketplace/approval.teal"
+    );
+    const approval = fs.readFileSync(data1);
+    const approvalpath = await algotxn.getBasicProgramBytes(approval);
+    const data2 = path.join(
+      __dirname,
+      "../assets/artifacts/nft-marketplace/clear.teal"
+    );
+    const clear = fs.readFileSync(data2);
+    const clearpath = await algotxn.getBasicProgramBytes(clear);
+    const txn = await algotxn.deployNFTContract(
+      seller.addr,
+      approvalpath,
+      clearpath,
+      32,
+      32
+    );
+    nftcontract = await algotxn.signAndSubmit(algodClient, [txn], seller);
+    nftcontractid = Number(nftcontract.confirmation["application-index"]);
+
+    const fund = Math.floor(Math.random() * 9000000) + 1000000;
+
+    await algotxn.fundAccount(
+      creator,
+      getApplicationAddress(nftcontractid),
+      fund
+    );
+    //attempt to withdraw from NFT contract twice consecutively
+    await algotxn.contentcreatorwithdraw(
+      algodClient,
+      nftcontractid,
+      seller.addr,
+      algosdk.makeBasicAccountTransactionSigner(seller)
+    );
+    await expect(
+      algotxn.contentcreatorwithdraw(
+        algodClient,
+        nftcontractid,
+        seller.addr,
+        algosdk.makeBasicAccountTransactionSigner(seller)
+      )
+    ).to.be.rejectedWith(Error);
   });
 });
